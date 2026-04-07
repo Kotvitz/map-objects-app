@@ -1,8 +1,11 @@
+import { Layout } from "./components/layout/Layout";
+
 function App() {
   return (
-    <div>
-      <h1>Map Objects App</h1>
-    </div>
+    <Layout
+      sidebar={<div>Object List</div>}
+      map={<div>Map will be here</div>}
+    />
   );
 }
 
