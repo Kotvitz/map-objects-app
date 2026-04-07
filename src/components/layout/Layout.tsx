@@ -1,5 +1,3 @@
-import { Flex } from "@mantine/core";
-
 type Props = {
   sidebar: React.ReactNode;
   map: React.ReactNode;
@@ -7,14 +5,36 @@ type Props = {
 
 export function Layout({ sidebar, map }: Props) {
   return (
-    <Flex h="100vh">
-      <Flex w={300} p="sm" direction="column">
+    <div
+      style={{
+        display: "flex",
+        width: "100vw",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
+      <aside
+        style={{
+          width: 320,
+          borderRight: "1px solid #ddd",
+          padding: 16,
+          overflowY: "auto",
+          background: "#fff",
+        }}
+      >
         {sidebar}
-      </Flex>
+      </aside>
 
-      <Flex flex={1}>
+      <main
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: "100%",
+          position: "relative",
+        }}
+      >
         {map}
-      </Flex>
-    </Flex>
+      </main>
+    </div>
   );
 }
