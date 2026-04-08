@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { Geoman, type GmOptionsPartial } from "@geoman-io/maplibre-geoman-free";
-import type { Feature, FeatureCollection, GeoJsonProperties } from "geojson";
+import type {
+  Feature,
+  FeatureCollection,
+  GeoJsonProperties,
+  MultiPolygon,
+} from "geojson";
 import type { MapObject, SupportedGeometry } from "../../types/MapObject";
 
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -19,11 +24,34 @@ const POLYGON_LAYER_ID = "objects-polygons-layer";
 
 type MapObjectFeature = Feature<SupportedGeometry, GeoJsonProperties>;
 
+function normalizeGeometry(
+  geometry: SupportedGeometry | MultiPolygon,
+): SupportedGeometry | null {
+  if (
+    geometry.type === "Point" ||
+    geometry.type === "LineString" ||
+    geometry.type === "Polygon"
+  ) {
+    return geometry;
+  }
+
+  if (geometry.type === "MultiPolygon" && geometry.coordinates.length === 1) {
+    return {
+      type: "Polygon",
+      coordinates: geometry.coordinates[0],
+    };
+  }
+
+  return null;
+}
+
 export function MapView({ objects, onGeometryCreated }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
 
-  const featureCollection = useMemo<FeatureCollection<SupportedGeometry, GeoJsonProperties>>(
+  const featureCollection = useMemo<
+    FeatureCollection<SupportedGeometry, GeoJsonProperties>
+  >(
     () => ({
       type: "FeatureCollection",
       features: objects.map<MapObjectFeature>((object) => ({
@@ -39,7 +67,7 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         },
       })),
     }),
-    [objects]
+    [objects],
   );
 
   useEffect(() => {
@@ -99,6 +127,7 @@ export function MapView({ objects, onGeometryCreated }: Props) {
           getGeoJson?: () => {
             geometry?: unknown;
           };
+          delete?: () => void;
         };
       };
 
@@ -111,15 +140,14 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         geometryCandidate !== null &&
         "type" in geometryCandidate
       ) {
-        const geometry = geometryCandidate as SupportedGeometry;
+        const normalizedGeometry = normalizeGeometry(
+          geometryCandidate as SupportedGeometry | MultiPolygon,
+        );
 
-        if (
-          geometry.type === "Point" ||
-          geometry.type === "LineString" ||
-          geometry.type === "Polygon"
-        ) {
-          onGeometryCreated(geometry);
-        }
+        if (!normalizedGeometry) return;
+
+        onGeometryCreated(normalizedGeometry);
+        candidate.feature?.delete?.();
       }
     });
 
@@ -189,7 +217,10 @@ export function MapView({ objects, onGeometryCreated }: Props) {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const source = map.getSource(OBJECTS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    const source = map.getSource(OBJECTS_SOURCE_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
+
     if (!source) return;
 
     source.setData(featureCollection);
