@@ -1,18 +1,46 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { Geoman, type GmOptionsPartial } from "@geoman-io/maplibre-geoman-free";
-import type { SupportedGeometry } from "../../types/MapObject";
+import type { Feature, FeatureCollection, GeoJsonProperties } from "geojson";
+import type { MapObject, SupportedGeometry } from "../../types/MapObject";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
 
 type Props = {
+  objects: MapObject[];
   onGeometryCreated: (geometry: SupportedGeometry) => void;
 };
 
-export function MapView({ onGeometryCreated }: Props) {
+const OBJECTS_SOURCE_ID = "objects-source";
+const POINT_LAYER_ID = "objects-points-layer";
+const LINE_LAYER_ID = "objects-lines-layer";
+const POLYGON_LAYER_ID = "objects-polygons-layer";
+
+type MapObjectFeature = Feature<SupportedGeometry, GeoJsonProperties>;
+
+export function MapView({ objects, onGeometryCreated }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+
+  const featureCollection = useMemo<FeatureCollection<SupportedGeometry, GeoJsonProperties>>(
+    () => ({
+      type: "FeatureCollection",
+      features: objects.map<MapObjectFeature>((object) => ({
+        type: "Feature",
+        geometry: object.geometry,
+        properties: {
+          id: object.id,
+          name: object.name,
+          description: object.description,
+          imageUrl: object.imageUrl,
+          color: object.color,
+          order: object.order,
+        },
+      })),
+    }),
+    [objects]
+  );
 
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
@@ -97,6 +125,49 @@ export function MapView({ onGeometryCreated }: Props) {
 
     map.on("load", () => {
       map.resize();
+
+      map.addSource(OBJECTS_SOURCE_ID, {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [],
+        },
+      });
+
+      map.addLayer({
+        id: POLYGON_LAYER_ID,
+        type: "fill",
+        source: OBJECTS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "Polygon"],
+        paint: {
+          "fill-color": ["coalesce", ["get", "color"], "#3388ff"],
+          "fill-opacity": 0.4,
+        },
+      });
+
+      map.addLayer({
+        id: LINE_LAYER_ID,
+        type: "line",
+        source: OBJECTS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: {
+          "line-color": ["coalesce", ["get", "color"], "#3388ff"],
+          "line-width": 4,
+        },
+      });
+
+      map.addLayer({
+        id: POINT_LAYER_ID,
+        type: "circle",
+        source: OBJECTS_SOURCE_ID,
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-color": ["coalesce", ["get", "color"], "#3388ff"],
+          "circle-radius": 8,
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff",
+        },
+      });
     });
 
     mapRef.current = map;
@@ -113,6 +184,16 @@ export function MapView({ onGeometryCreated }: Props) {
       mapRef.current = null;
     };
   }, [onGeometryCreated]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const source = map.getSource(OBJECTS_SOURCE_ID) as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+
+    source.setData(featureCollection);
+  }, [featureCollection]);
 
   return (
     <div
