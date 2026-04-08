@@ -66,7 +66,12 @@ function App() {
             )}
           </Stack>
         }
-        map={<MapView onGeometryCreated={handleGeometryCreated} />}
+        map={
+          <MapView
+            objects={objects}
+            onGeometryCreated={handleGeometryCreated}
+          />
+        }
       />
 
       <ObjectFormModal
