@@ -25,7 +25,7 @@ const POLYGON_LAYER_ID = "objects-polygons-layer";
 type MapObjectFeature = Feature<SupportedGeometry, GeoJsonProperties>;
 
 function normalizeGeometry(
-  geometry: SupportedGeometry | MultiPolygon,
+  geometry: SupportedGeometry | MultiPolygon
 ): SupportedGeometry | null {
   if (
     geometry.type === "Point" ||
@@ -45,9 +45,70 @@ function normalizeGeometry(
   return null;
 }
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function buildPopupHtml(properties: GeoJsonProperties | null | undefined): string {
+  const name =
+    typeof properties?.name === "string" && properties.name.trim()
+      ? properties.name
+      : "Unnamed object";
+
+  const description =
+    typeof properties?.description === "string" ? properties.description : "";
+
+  const imageUrl =
+    typeof properties?.imageUrl === "string" ? properties.imageUrl : "";
+
+  const safeName = escapeHtml(name);
+  const safeDescription = escapeHtml(description);
+  const safeImageUrl = escapeHtml(imageUrl);
+
+  const imageSection = imageUrl
+    ? `
+      <img
+        src="${safeImageUrl}"
+        alt="${safeName}"
+        style="width: 100%; max-width: 220px; border-radius: 8px; margin-top: 8px; display: block;"
+        onerror="this.style.display='none';"
+      />
+    `
+    : "";
+
+  const descriptionSection = description
+    ? `<p style="margin: 8px 0 0; font-size: 14px; line-height: 1.4;">${safeDescription}</p>`
+    : `<p style="margin: 8px 0 0; font-size: 14px; color: #666;">No description</p>`;
+
+  return `
+    <div style="min-width: 200px; max-width: 240px;">
+      <div style="font-weight: 700; font-size: 16px;">${safeName}</div>
+      ${descriptionSection}
+      ${imageSection}
+    </div>
+  `;
+}
+
+function getPopupLngLat(
+  feature: maplibregl.MapGeoJSONFeature,
+  clickLngLat: maplibregl.LngLat
+): maplibregl.LngLatLike {
+  if (feature.geometry.type === "Point") {
+    return feature.geometry.coordinates as [number, number];
+  }
+
+  return clickLngLat;
+}
+
 export function MapView({ objects, onGeometryCreated }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const popupRef = useRef<maplibregl.Popup | null>(null);
 
   const featureCollection = useMemo<
     FeatureCollection<SupportedGeometry, GeoJsonProperties>
@@ -67,7 +128,7 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         },
       })),
     }),
-    [objects],
+    [objects]
   );
 
   useEffect(() => {
@@ -141,7 +202,7 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         "type" in geometryCandidate
       ) {
         const normalizedGeometry = normalizeGeometry(
-          geometryCandidate as SupportedGeometry | MultiPolygon,
+          geometryCandidate as SupportedGeometry | MultiPolygon
         );
 
         if (!normalizedGeometry) return;
@@ -196,6 +257,38 @@ export function MapView({ objects, onGeometryCreated }: Props) {
           "circle-stroke-color": "#ffffff",
         },
       });
+
+      const clickableLayerIds = [POINT_LAYER_ID, LINE_LAYER_ID, POLYGON_LAYER_ID] as const;
+
+      const handleFeatureClick = (event: maplibregl.MapLayerMouseEvent) => {
+        const feature = event.features?.[0];
+        if (!feature) return;
+
+        popupRef.current?.remove();
+
+        popupRef.current = new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          maxWidth: "260px",
+        })
+          .setLngLat(getPopupLngLat(feature, event.lngLat))
+          .setHTML(buildPopupHtml(feature.properties))
+          .addTo(map);
+      };
+
+      const handleMouseEnter = () => {
+        map.getCanvas().style.cursor = "pointer";
+      };
+
+      const handleMouseLeave = () => {
+        map.getCanvas().style.cursor = "";
+      };
+
+      clickableLayerIds.forEach((layerId) => {
+        map.on("click", layerId, handleFeatureClick);
+        map.on("mouseenter", layerId, handleMouseEnter);
+        map.on("mouseleave", layerId, handleMouseLeave);
+      });
     });
 
     mapRef.current = map;
@@ -208,6 +301,8 @@ export function MapView({ objects, onGeometryCreated }: Props) {
 
     return () => {
       window.removeEventListener("resize", handleResize);
+      popupRef.current?.remove();
+      popupRef.current = null;
       map.remove();
       mapRef.current = null;
     };
@@ -217,9 +312,9 @@ export function MapView({ objects, onGeometryCreated }: Props) {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const source = map.getSource(OBJECTS_SOURCE_ID) as
-      | maplibregl.GeoJSONSource
-      | undefined;
+    const source = map.getSource(
+      OBJECTS_SOURCE_ID
+    ) as maplibregl.GeoJSONSource | undefined;
 
     if (!source) return;
 
