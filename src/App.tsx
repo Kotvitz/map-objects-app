@@ -1,5 +1,6 @@
 import { useCallback, useState } from "react";
-import { Button, Stack, Text } from "@mantine/core";
+import { ActionIcon, Group, Stack, Text } from "@mantine/core";
+import { IconTrash } from "@tabler/icons-react";
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
 import { ObjectFormModal } from "./features/objects/ObjectFormModal";
@@ -14,8 +15,7 @@ type ObjectFormValues = {
 
 function App() {
   const [objects, setObjects] = useState<MapObject[]>([]);
-  const [pendingGeometry, setPendingGeometry] =
-    useState<SupportedGeometry | null>(null);
+  const [pendingGeometry, setPendingGeometry] = useState<SupportedGeometry | null>(null);
   const [formOpened, setFormOpened] = useState(false);
 
   const handleGeometryCreated = useCallback((geometry: SupportedGeometry) => {
@@ -46,6 +46,17 @@ function App() {
     setPendingGeometry(null);
   };
 
+  const handleDeleteObject = (objectId: string) => {
+    setObjects((current) =>
+      current
+        .filter((object) => object.id !== objectId)
+        .map((object, index) => ({
+          ...object,
+          order: index,
+        }))
+    );
+  };
+
   return (
     <>
       <Layout
@@ -59,9 +70,31 @@ function App() {
               </Text>
             ) : (
               objects.map((object) => (
-                <Button key={object.id} variant="light" justify="flex-start">
-                  {object.name}
-                </Button>
+                <Group
+                  key={object.id}
+                  justify="space-between"
+                  wrap="nowrap"
+                  p="xs"
+                  style={{
+                    border: "1px solid #e9ecef",
+                    borderRadius: 8,
+                  }}
+                >
+                  <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+                    <Text fw={500} truncate>
+                      {object.name}
+                    </Text>
+                  </Stack>
+
+                  <ActionIcon
+                    color="red"
+                    variant="light"
+                    aria-label={`Delete ${object.name}`}
+                    onClick={() => handleDeleteObject(object.id)}
+                  >
+                    <IconTrash size={16} />
+                  </ActionIcon>
+                </Group>
               ))
             )}
           </Stack>
