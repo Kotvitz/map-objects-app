@@ -1,23 +1,20 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ActionIcon, Group, Stack, Text, UnstyledButton } from "@mantine/core";
-import { IconTrash } from "@tabler/icons-react";
+import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
-import { ObjectFormModal } from "./features/objects/ObjectFormModal";
+import {
+  ObjectFormModal,
+  type ObjectFormValues,
+} from "./features/objects/ObjectFormModal";
 import type { MapObject, SupportedGeometry } from "./types/MapObject";
-
-type ObjectFormValues = {
-  name: string;
-  description: string;
-  imageUrl: string;
-  color: string;
-};
 
 function App() {
   const [objects, setObjects] = useState<MapObject[]>([]);
-  const [pendingGeometry, setPendingGeometry] =
-    useState<SupportedGeometry | null>(null);
+  const [pendingGeometry, setPendingGeometry] = useState<SupportedGeometry | null>(null);
   const [formOpened, setFormOpened] = useState(false);
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
+  const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
   const [focusRequest, setFocusRequest] = useState<{
     objectId: string;
     requestId: number;
@@ -25,12 +22,16 @@ function App() {
 
   const handleGeometryCreated = useCallback((geometry: SupportedGeometry) => {
     setPendingGeometry(geometry);
+    setEditingObjectId(null);
+    setFormMode("create");
     setFormOpened(true);
   }, []);
 
   const handleCloseForm = () => {
     setFormOpened(false);
     setPendingGeometry(null);
+    setEditingObjectId(null);
+    setFormMode("create");
   };
 
   const handleCreateObject = (values: ObjectFormValues) => {
@@ -51,6 +52,44 @@ function App() {
     setPendingGeometry(null);
   };
 
+  const handleEditObject = (values: ObjectFormValues) => {
+    if (!editingObjectId) return;
+
+    setObjects((current) =>
+      current.map((object) =>
+        object.id === editingObjectId
+          ? {
+              ...object,
+              name: values.name,
+              description: values.description,
+              imageUrl: values.imageUrl,
+              color: values.color,
+            }
+          : object
+      )
+    );
+
+    setFormOpened(false);
+    setEditingObjectId(null);
+    setFormMode("create");
+  };
+
+  const handleSubmitForm = (values: ObjectFormValues) => {
+    if (formMode === "create") {
+      handleCreateObject(values);
+      return;
+    }
+
+    handleEditObject(values);
+  };
+
+  const handleStartEditObject = (objectId: string) => {
+    setEditingObjectId(objectId);
+    setPendingGeometry(null);
+    setFormMode("edit");
+    setFormOpened(true);
+  };
+
   const handleDeleteObject = (objectId: string) => {
     setObjects((current) =>
       current
@@ -58,13 +97,35 @@ function App() {
         .map((object, index) => ({
           ...object,
           order: index,
-        })),
+        }))
     );
 
     setFocusRequest((currentFocusRequest) =>
-      currentFocusRequest?.objectId === objectId ? null : currentFocusRequest,
+      currentFocusRequest?.objectId === objectId ? null : currentFocusRequest
+    );
+
+    setEditingObjectId((currentEditingId) =>
+      currentEditingId === objectId ? null : currentEditingId
     );
   };
+
+  const editingObject = useMemo(
+    () => objects.find((object) => object.id === editingObjectId) ?? null,
+    [editingObjectId, objects]
+  );
+
+  const formInitialValues = useMemo<ObjectFormValues | undefined>(() => {
+    if (formMode === "edit" && editingObject) {
+      return {
+        name: editingObject.name,
+        description: editingObject.description ?? "",
+        imageUrl: editingObject.imageUrl ?? "",
+        color: editingObject.color,
+      };
+    }
+
+    return undefined;
+  }, [editingObject, formMode]);
 
   return (
     <>
@@ -105,14 +166,25 @@ function App() {
                     </Stack>
                   </UnstyledButton>
 
-                  <ActionIcon
-                    color="red"
-                    variant="light"
-                    aria-label={`Delete ${object.name}`}
-                    onClick={() => handleDeleteObject(object.id)}
-                  >
-                    <IconTrash size={16} />
-                  </ActionIcon>
+                  <Group gap="xs" wrap="nowrap">
+                    <ActionIcon
+                      color="blue"
+                      variant="light"
+                      aria-label={`Edit ${object.name}`}
+                      onClick={() => handleStartEditObject(object.id)}
+                    >
+                      <IconPencil size={16} />
+                    </ActionIcon>
+
+                    <ActionIcon
+                      color="red"
+                      variant="light"
+                      aria-label={`Delete ${object.name}`}
+                      onClick={() => handleDeleteObject(object.id)}
+                    >
+                      <IconTrash size={16} />
+                    </ActionIcon>
+                  </Group>
                 </Group>
               ))
             )}
@@ -129,8 +201,10 @@ function App() {
 
       <ObjectFormModal
         opened={formOpened}
+        mode={formMode}
+        initialValues={formInitialValues}
         onClose={handleCloseForm}
-        onSubmit={handleCreateObject}
+        onSubmit={handleSubmitForm}
       />
     </>
   );
