@@ -1,7 +1,8 @@
+import { useEffect } from "react";
 import { Button, ColorInput, Group, Modal, Stack, TextInput, Textarea } from "@mantine/core";
 import { useForm } from "@mantine/form";
 
-type ObjectFormValues = {
+export type ObjectFormValues = {
   name: string;
   description: string;
   imageUrl: string;
@@ -10,18 +11,28 @@ type ObjectFormValues = {
 
 type Props = {
   opened: boolean;
+  mode: "create" | "edit";
+  initialValues?: ObjectFormValues;
   onClose: () => void;
   onSubmit: (values: ObjectFormValues) => void;
 };
 
-export function ObjectFormModal({ opened, onClose, onSubmit }: Props) {
+const defaultValues: ObjectFormValues = {
+  name: "",
+  description: "",
+  imageUrl: "",
+  color: "#3388ff",
+};
+
+export function ObjectFormModal({
+  opened,
+  mode,
+  initialValues,
+  onClose,
+  onSubmit,
+}: Props) {
   const form = useForm<ObjectFormValues>({
-    initialValues: {
-      name: "",
-      description: "",
-      imageUrl: "",
-      color: "#3388ff",
-    },
+    initialValues: initialValues ?? defaultValues,
     validate: {
       name: (value) => (value.trim().length === 0 ? "Name is required" : null),
       imageUrl: (value) => {
@@ -38,6 +49,11 @@ export function ObjectFormModal({ opened, onClose, onSubmit }: Props) {
     },
   });
 
+  useEffect(() => {
+    form.setValues(initialValues ?? defaultValues);
+    form.resetDirty(initialValues ?? defaultValues);
+  }, [initialValues, opened]);
+
   const handleClose = () => {
     form.reset();
     onClose();
@@ -49,7 +65,12 @@ export function ObjectFormModal({ opened, onClose, onSubmit }: Props) {
   };
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="Add object" centered>
+    <Modal
+      opened={opened}
+      onClose={handleClose}
+      title={mode === "create" ? "Add object" : "Edit object"}
+      centered
+    >
       <form onSubmit={form.onSubmit(handleSubmit)}>
         <Stack>
           <TextInput
@@ -83,7 +104,9 @@ export function ObjectFormModal({ opened, onClose, onSubmit }: Props) {
             <Button variant="default" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit">Save</Button>
+            <Button type="submit">
+              {mode === "create" ? "Save" : "Update"}
+            </Button>
           </Group>
         </Stack>
       </form>
