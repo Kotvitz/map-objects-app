@@ -6,14 +6,21 @@ import type {
   FeatureCollection,
   GeoJsonProperties,
   MultiPolygon,
+  Position,
 } from "geojson";
 import type { MapObject, SupportedGeometry } from "../../types/MapObject";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
 
+type FocusRequest = {
+  objectId: string;
+  requestId: number;
+} | null;
+
 type Props = {
   objects: MapObject[];
+  focusRequest: FocusRequest;
   onGeometryCreated: (geometry: SupportedGeometry) => void;
 };
 
@@ -25,7 +32,7 @@ const POLYGON_LAYER_ID = "objects-polygons-layer";
 type MapObjectFeature = Feature<SupportedGeometry, GeoJsonProperties>;
 
 function normalizeGeometry(
-  geometry: SupportedGeometry | MultiPolygon
+  geometry: SupportedGeometry | MultiPolygon,
 ): SupportedGeometry | null {
   if (
     geometry.type === "Point" ||
@@ -54,7 +61,9 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function buildPopupHtml(properties: GeoJsonProperties | null | undefined): string {
+function buildPopupHtml(
+  properties: GeoJsonProperties | null | undefined,
+): string {
   const name =
     typeof properties?.name === "string" && properties.name.trim()
       ? properties.name
@@ -96,7 +105,7 @@ function buildPopupHtml(properties: GeoJsonProperties | null | undefined): strin
 
 function getPopupLngLat(
   feature: maplibregl.MapGeoJSONFeature,
-  clickLngLat: maplibregl.LngLat
+  clickLngLat: maplibregl.LngLat,
 ): maplibregl.LngLatLike {
   if (feature.geometry.type === "Point") {
     return feature.geometry.coordinates as [number, number];
@@ -105,7 +114,52 @@ function getPopupLngLat(
   return clickLngLat;
 }
 
-export function MapView({ objects, onGeometryCreated }: Props) {
+function collectCoordinates(geometry: SupportedGeometry): [number, number][] {
+  if (geometry.type === "Point") {
+    const [lng, lat] = geometry.coordinates;
+    return [[lng, lat]];
+  }
+
+  if (geometry.type === "LineString") {
+    return geometry.coordinates.map(([lng, lat]) => [lng, lat]);
+  }
+
+  return geometry.coordinates.flat().map((position: Position) => {
+    const [lng, lat] = position;
+    return [lng, lat];
+  });
+}
+
+function flyToObject(map: maplibregl.Map, object: MapObject) {
+  const coordinates = collectCoordinates(object.geometry);
+
+  if (coordinates.length === 0) return;
+
+  if (object.geometry.type === "Point") {
+    const [lng, lat] = coordinates[0];
+
+    map.flyTo({
+      center: [lng, lat],
+      zoom: 14,
+      essential: true,
+    });
+
+    return;
+  }
+
+  const bounds = coordinates.reduce(
+    (accumulator, [lng, lat]) => accumulator.extend([lng, lat]),
+    new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+  );
+
+  map.fitBounds(bounds, {
+    padding: 60,
+    maxZoom: 15,
+    duration: 800,
+  });
+}
+
+export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -128,7 +182,7 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         },
       })),
     }),
-    [objects]
+    [objects],
   );
 
   useEffect(() => {
@@ -202,7 +256,7 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         "type" in geometryCandidate
       ) {
         const normalizedGeometry = normalizeGeometry(
-          geometryCandidate as SupportedGeometry | MultiPolygon
+          geometryCandidate as SupportedGeometry | MultiPolygon,
         );
 
         if (!normalizedGeometry) return;
@@ -258,7 +312,11 @@ export function MapView({ objects, onGeometryCreated }: Props) {
         },
       });
 
-      const clickableLayerIds = [POINT_LAYER_ID, LINE_LAYER_ID, POLYGON_LAYER_ID] as const;
+      const clickableLayerIds = [
+        POINT_LAYER_ID,
+        LINE_LAYER_ID,
+        POLYGON_LAYER_ID,
+      ] as const;
 
       const handleFeatureClick = (event: maplibregl.MapLayerMouseEvent) => {
         const feature = event.features?.[0];
@@ -312,14 +370,29 @@ export function MapView({ objects, onGeometryCreated }: Props) {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const source = map.getSource(
-      OBJECTS_SOURCE_ID
-    ) as maplibregl.GeoJSONSource | undefined;
+    const source = map.getSource(OBJECTS_SOURCE_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
 
     if (!source) return;
 
     source.setData(featureCollection);
   }, [featureCollection]);
+
+  useEffect(() => {
+    if (!focusRequest) return;
+
+    const map = mapRef.current;
+    if (!map) return;
+
+    const selectedObject = objects.find(
+      (object) => object.id === focusRequest.objectId,
+    );
+
+    if (!selectedObject) return;
+
+    flyToObject(map, selectedObject);
+  }, [objects, focusRequest]);
 
   return (
     <div

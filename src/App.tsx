@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { ActionIcon, Group, Stack, Text } from "@mantine/core";
+import { ActionIcon, Group, Stack, Text, UnstyledButton } from "@mantine/core";
 import { IconTrash } from "@tabler/icons-react";
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
@@ -15,8 +15,13 @@ type ObjectFormValues = {
 
 function App() {
   const [objects, setObjects] = useState<MapObject[]>([]);
-  const [pendingGeometry, setPendingGeometry] = useState<SupportedGeometry | null>(null);
+  const [pendingGeometry, setPendingGeometry] =
+    useState<SupportedGeometry | null>(null);
   const [formOpened, setFormOpened] = useState(false);
+  const [focusRequest, setFocusRequest] = useState<{
+    objectId: string;
+    requestId: number;
+  } | null>(null);
 
   const handleGeometryCreated = useCallback((geometry: SupportedGeometry) => {
     setPendingGeometry(geometry);
@@ -53,7 +58,11 @@ function App() {
         .map((object, index) => ({
           ...object,
           order: index,
-        }))
+        })),
+    );
+
+    setFocusRequest((currentFocusRequest) =>
+      currentFocusRequest?.objectId === objectId ? null : currentFocusRequest,
     );
   };
 
@@ -80,11 +89,21 @@ function App() {
                     borderRadius: 8,
                   }}
                 >
-                  <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-                    <Text fw={500} truncate>
-                      {object.name}
-                    </Text>
-                  </Stack>
+                  <UnstyledButton
+                    onClick={() =>
+                      setFocusRequest({
+                        objectId: object.id,
+                        requestId: Date.now(),
+                      })
+                    }
+                    style={{ minWidth: 0, flex: 1 }}
+                  >
+                    <Stack gap={2}>
+                      <Text fw={500} truncate>
+                        {object.name}
+                      </Text>
+                    </Stack>
+                  </UnstyledButton>
 
                   <ActionIcon
                     color="red"
@@ -102,6 +121,7 @@ function App() {
         map={
           <MapView
             objects={objects}
+            focusRequest={focusRequest}
             onGeometryCreated={handleGeometryCreated}
           />
         }
