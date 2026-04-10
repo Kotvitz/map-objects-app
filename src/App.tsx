@@ -1,5 +1,13 @@
 import { useCallback, useMemo, useState } from "react";
-import { ActionIcon, Group, Stack, Text, UnstyledButton } from "@mantine/core";
+import {
+  ActionIcon,
+  Group,
+  Loader,
+  Stack,
+  Text,
+  UnstyledButton,
+} from "@mantine/core";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { IconPencil, IconTrash } from "@tabler/icons-react";
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
@@ -7,11 +15,21 @@ import {
   ObjectFormModal,
   type ObjectFormValues,
 } from "./features/objects/ObjectFormModal";
-import type { MapObject, SupportedGeometry } from "./types/MapObject";
+import {
+  createObject,
+  deleteObject,
+  getObjects,
+  updateObject,
+} from "./services/objectApi";
+import type { SupportedGeometry } from "./types/MapObject";
+
+const OBJECTS_QUERY_KEY = ["objects"];
 
 function App() {
-  const [objects, setObjects] = useState<MapObject[]>([]);
-  const [pendingGeometry, setPendingGeometry] = useState<SupportedGeometry | null>(null);
+  const queryClient = useQueryClient();
+
+  const [pendingGeometry, setPendingGeometry] =
+    useState<SupportedGeometry | null>(null);
   const [formOpened, setFormOpened] = useState(false);
   const [formMode, setFormMode] = useState<"create" | "edit">("create");
   const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
@@ -19,6 +37,54 @@ function App() {
     objectId: string;
     requestId: number;
   } | null>(null);
+
+  const {
+    data: objects = [],
+    isLoading,
+    isError,
+  } = useQuery({
+    queryKey: OBJECTS_QUERY_KEY,
+    queryFn: getObjects,
+  });
+
+  const createObjectMutation = useMutation({
+    mutationFn: createObject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OBJECTS_QUERY_KEY });
+      setFormOpened(false);
+      setPendingGeometry(null);
+      setEditingObjectId(null);
+      setFormMode("create");
+    },
+  });
+
+  const updateObjectMutation = useMutation({
+    mutationFn: ({ id, values }: { id: string; values: ObjectFormValues }) =>
+      updateObject(id, values),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OBJECTS_QUERY_KEY });
+      setFormOpened(false);
+      setEditingObjectId(null);
+      setFormMode("create");
+    },
+  });
+
+  const deleteObjectMutation = useMutation({
+    mutationFn: deleteObject,
+    onSuccess: (_, deletedObjectId) => {
+      queryClient.invalidateQueries({ queryKey: OBJECTS_QUERY_KEY });
+
+      setFocusRequest((currentFocusRequest) =>
+        currentFocusRequest?.objectId === deletedObjectId
+          ? null
+          : currentFocusRequest,
+      );
+
+      setEditingObjectId((currentEditingId) =>
+        currentEditingId === deletedObjectId ? null : currentEditingId,
+      );
+    },
+  });
 
   const handleGeometryCreated = useCallback((geometry: SupportedGeometry) => {
     setPendingGeometry(geometry);
@@ -37,41 +103,19 @@ function App() {
   const handleCreateObject = (values: ObjectFormValues) => {
     if (!pendingGeometry) return;
 
-    const newObject: MapObject = {
-      id: crypto.randomUUID(),
-      name: values.name,
-      description: values.description,
-      imageUrl: values.imageUrl,
-      color: values.color,
+    createObjectMutation.mutate({
+      ...values,
       geometry: pendingGeometry,
-      order: objects.length,
-    };
-
-    setObjects((current) => [...current, newObject]);
-    setFormOpened(false);
-    setPendingGeometry(null);
+    });
   };
 
   const handleEditObject = (values: ObjectFormValues) => {
     if (!editingObjectId) return;
 
-    setObjects((current) =>
-      current.map((object) =>
-        object.id === editingObjectId
-          ? {
-              ...object,
-              name: values.name,
-              description: values.description,
-              imageUrl: values.imageUrl,
-              color: values.color,
-            }
-          : object
-      )
-    );
-
-    setFormOpened(false);
-    setEditingObjectId(null);
-    setFormMode("create");
+    updateObjectMutation.mutate({
+      id: editingObjectId,
+      values,
+    });
   };
 
   const handleSubmitForm = (values: ObjectFormValues) => {
@@ -91,27 +135,12 @@ function App() {
   };
 
   const handleDeleteObject = (objectId: string) => {
-    setObjects((current) =>
-      current
-        .filter((object) => object.id !== objectId)
-        .map((object, index) => ({
-          ...object,
-          order: index,
-        }))
-    );
-
-    setFocusRequest((currentFocusRequest) =>
-      currentFocusRequest?.objectId === objectId ? null : currentFocusRequest
-    );
-
-    setEditingObjectId((currentEditingId) =>
-      currentEditingId === objectId ? null : currentEditingId
-    );
+    deleteObjectMutation.mutate(objectId);
   };
 
   const editingObject = useMemo(
     () => objects.find((object) => object.id === editingObjectId) ?? null,
-    [editingObjectId, objects]
+    [editingObjectId, objects],
   );
 
   const formInitialValues = useMemo<ObjectFormValues | undefined>(() => {
@@ -127,6 +156,9 @@ function App() {
     return undefined;
   }, [editingObject, formMode]);
 
+  const isSubmitting =
+    createObjectMutation.isPending || updateObjectMutation.isPending;
+
   return (
     <>
       <Layout
@@ -134,7 +166,18 @@ function App() {
           <Stack>
             <Text fw={700}>Objects</Text>
 
-            {objects.length === 0 ? (
+            {isLoading ? (
+              <Group gap="xs">
+                <Loader size="sm" />
+                <Text size="sm" c="dimmed">
+                  Loading objects...
+                </Text>
+              </Group>
+            ) : isError ? (
+              <Text c="red" size="sm">
+                Failed to load objects
+              </Text>
+            ) : objects.length === 0 ? (
               <Text c="dimmed" size="sm">
                 No objects yet
               </Text>
@@ -180,6 +223,7 @@ function App() {
                       color="red"
                       variant="light"
                       aria-label={`Delete ${object.name}`}
+                      loading={deleteObjectMutation.isPending}
                       onClick={() => handleDeleteObject(object.id)}
                     >
                       <IconTrash size={16} />
@@ -205,6 +249,7 @@ function App() {
         initialValues={formInitialValues}
         onClose={handleCloseForm}
         onSubmit={handleSubmitForm}
+        submitting={isSubmitting}
       />
     </>
   );

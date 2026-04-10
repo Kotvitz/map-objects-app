@@ -15,6 +15,7 @@ type Props = {
   initialValues?: ObjectFormValues;
   onClose: () => void;
   onSubmit: (values: ObjectFormValues) => void;
+  submitting?: boolean;
 };
 
 const defaultValues: ObjectFormValues = {
@@ -30,6 +31,7 @@ export function ObjectFormModal({
   initialValues,
   onClose,
   onSubmit,
+  submitting = false,
 }: Props) {
   const form = useForm<ObjectFormValues>({
     initialValues: initialValues ?? defaultValues,
@@ -104,9 +106,9 @@ export function ObjectFormModal({
             <Button variant="default" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit">
-              {mode === "create" ? "Save" : "Update"}
-            </Button>
+              <Button type="submit" loading={submitting}>
+                {mode === "create" ? "Save" : "Update"}
+              </Button>
           </Group>
         </Stack>
       </form>
