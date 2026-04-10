@@ -9,15 +9,19 @@ type UpdateMapObjectBody = Pick<
   MapObject,
   "name" | "description" | "imageUrl" | "color"
 >;
+type ReorderObjectsBody = {
+  orderedIds: string[];
+};
 
 export const handlers = [
   http.get(BASE_URL, () => {
-    return HttpResponse.json(getMockObjects());
+    const objects = getMockObjects().sort((a, b) => a.order - b.order);
+    return HttpResponse.json(objects);
   }),
 
   http.post(BASE_URL, async ({ request }) => {
     const body = (await request.json()) as CreateMapObjectBody;
-    const currentObjects = getMockObjects();
+    const currentObjects = getMockObjects().sort((a, b) => a.order - b.order);
 
     const newObject: MapObject = {
       id: crypto.randomUUID(),
@@ -33,6 +37,24 @@ export const handlers = [
     setMockObjects(nextObjects);
 
     return HttpResponse.json(newObject, { status: 201 });
+  }),
+
+  http.patch(`${BASE_URL}/reorder`, async ({ request }) => {
+    const body = (await request.json()) as ReorderObjectsBody;
+    const currentObjects = getMockObjects();
+
+    const objectMap = new Map(currentObjects.map((object) => [object.id, object]));
+    const reorderedObjects = body.orderedIds
+      .map((id) => objectMap.get(id))
+      .filter((object): object is MapObject => Boolean(object))
+      .map((object, index) => ({
+        ...object,
+        order: index,
+      }));
+
+    setMockObjects(reorderedObjects);
+
+    return HttpResponse.json(reorderedObjects);
   }),
 
   http.put(`${BASE_URL}/:id`, async ({ params, request }) => {

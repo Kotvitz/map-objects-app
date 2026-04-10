@@ -63,3 +63,21 @@ export async function deleteObject(id: string): Promise<void> {
     throw new Error("Failed to delete object");
   }
 }
+
+export async function reorderObjects(
+  orderedIds: string[]
+): Promise<MapObject[]> {
+  const response = await fetch(`${BASE_URL}/reorder`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ orderedIds }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Failed to reorder objects");
+  }
+
+  return response.json() as Promise<MapObject[]>;
+}
