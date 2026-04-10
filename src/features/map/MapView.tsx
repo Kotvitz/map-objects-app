@@ -169,20 +169,23 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
   >(
     () => ({
       type: "FeatureCollection",
-      features: objects.map<MapObjectFeature>((object) => ({
-        type: "Feature",
-        geometry: object.geometry,
-        properties: {
-          id: object.id,
-          name: object.name,
-          description: object.description,
-          imageUrl: object.imageUrl,
-          color: object.color,
-          order: object.order,
-        },
-      })),
+      features: [...objects]
+        .sort((a, b) => a.order - b.order)
+        .map<MapObjectFeature>((object, index, sortedObjects) => ({
+          type: "Feature",
+          geometry: object.geometry,
+          properties: {
+            id: object.id,
+            name: object.name,
+            description: object.description,
+            imageUrl: object.imageUrl,
+            color: object.color,
+            order: object.order,
+            renderOrder: sortedObjects.length - index,
+          },
+        })),
     }),
-    [objects],
+    [objects]
   );
 
   useEffect(() => {
@@ -282,6 +285,9 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
         type: "fill",
         source: OBJECTS_SOURCE_ID,
         filter: ["==", ["geometry-type"], "Polygon"],
+        layout: {
+          "fill-sort-key": ["get", "renderOrder"],
+        },
         paint: {
           "fill-color": ["coalesce", ["get", "color"], "#3388ff"],
           "fill-opacity": 0.4,
@@ -293,6 +299,9 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
         type: "line",
         source: OBJECTS_SOURCE_ID,
         filter: ["==", ["geometry-type"], "LineString"],
+        layout: {
+          "line-sort-key": ["get", "renderOrder"],
+        },
         paint: {
           "line-color": ["coalesce", ["get", "color"], "#3388ff"],
           "line-width": 4,
@@ -304,6 +313,9 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
         type: "circle",
         source: OBJECTS_SOURCE_ID,
         filter: ["==", ["geometry-type"], "Point"],
+        layout: {
+          "circle-sort-key": ["get", "renderOrder"],
+        },
         paint: {
           "circle-color": ["coalesce", ["get", "color"], "#3388ff"],
           "circle-radius": 8,

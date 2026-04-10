@@ -8,7 +8,22 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { IconPencil, IconTrash } from "@tabler/icons-react";
+import {
+  closestCenter,
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { IconGripVertical, IconPencil, IconTrash } from "@tabler/icons-react";
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
 import {
@@ -19,14 +34,100 @@ import {
   createObject,
   deleteObject,
   getObjects,
+  reorderObjects,
   updateObject,
 } from "./services/objectApi";
-import type { SupportedGeometry } from "./types/MapObject";
+import type { MapObject, SupportedGeometry } from "./types/MapObject";
 
 const OBJECTS_QUERY_KEY = ["objects"];
 
+type SortableObjectItemProps = {
+  object: MapObject;
+  onFocus: (objectId: string) => void;
+  onEdit: (objectId: string) => void;
+  onDelete: (objectId: string) => void;
+};
+
+function SortableObjectItem({
+  object,
+  onFocus,
+  onEdit,
+  onDelete,
+}: SortableObjectItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: object.id });
+
+  return (
+    <Group
+      ref={setNodeRef}
+      justify="space-between"
+      wrap="nowrap"
+      p="xs"
+      style={{
+        border: "1px solid #e9ecef",
+        borderRadius: 8,
+        background: "#fff",
+        opacity: isDragging ? 0.6 : 1,
+        transform: CSS.Transform.toString(transform),
+        transition,
+      }}
+    >
+      <Group gap="xs" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
+        <ActionIcon
+          variant="subtle"
+          color="gray"
+          aria-label={`Reorder ${object.name}`}
+          {...attributes}
+          {...listeners}
+          style={{ cursor: "grab" }}
+        >
+          <IconGripVertical size={16} />
+        </ActionIcon>
+
+        <UnstyledButton
+          onClick={() => onFocus(object.id)}
+          style={{ minWidth: 0, flex: 1 }}
+        >
+          <Stack gap={2}>
+            <Text fw={500} truncate>
+              {object.name}
+            </Text>
+          </Stack>
+        </UnstyledButton>
+      </Group>
+
+      <Group gap="xs" wrap="nowrap">
+        <ActionIcon
+          color="blue"
+          variant="light"
+          aria-label={`Edit ${object.name}`}
+          onClick={() => onEdit(object.id)}
+        >
+          <IconPencil size={16} />
+        </ActionIcon>
+
+        <ActionIcon
+          color="red"
+          variant="light"
+          aria-label={`Delete ${object.name}`}
+          onClick={() => onDelete(object.id)}
+        >
+          <IconTrash size={16} />
+        </ActionIcon>
+      </Group>
+    </Group>
+  );
+}
+
 function App() {
   const queryClient = useQueryClient();
+  const sensors = useSensors(useSensor(PointerSensor));
 
   const [pendingGeometry, setPendingGeometry] =
     useState<SupportedGeometry | null>(null);
@@ -42,10 +143,15 @@ function App() {
     data: objects = [],
     isLoading,
     isError,
-  } = useQuery({
+  } = useQuery<MapObject[]>({
     queryKey: OBJECTS_QUERY_KEY,
     queryFn: getObjects,
   });
+
+  const sortedObjects = useMemo(
+    () => [...objects].sort((a, b) => a.order - b.order),
+    [objects]
+  );
 
   const createObjectMutation = useMutation({
     mutationFn: createObject,
@@ -77,12 +183,19 @@ function App() {
       setFocusRequest((currentFocusRequest) =>
         currentFocusRequest?.objectId === deletedObjectId
           ? null
-          : currentFocusRequest,
+          : currentFocusRequest
       );
 
       setEditingObjectId((currentEditingId) =>
-        currentEditingId === deletedObjectId ? null : currentEditingId,
+        currentEditingId === deletedObjectId ? null : currentEditingId
       );
+    },
+  });
+
+  const reorderObjectsMutation = useMutation({
+    mutationFn: reorderObjects,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: OBJECTS_QUERY_KEY });
     },
   });
 
@@ -138,9 +251,32 @@ function App() {
     deleteObjectMutation.mutate(objectId);
   };
 
+  const handleFocusObject = (objectId: string) => {
+    setFocusRequest({
+      objectId,
+      requestId: Date.now(),
+    });
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = sortedObjects.findIndex((object) => object.id === active.id);
+    const newIndex = sortedObjects.findIndex((object) => object.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(sortedObjects, oldIndex, newIndex);
+    const orderedIds = reordered.map((object) => object.id);
+
+    reorderObjectsMutation.mutate(orderedIds);
+  };
+
   const editingObject = useMemo(
     () => objects.find((object) => object.id === editingObjectId) ?? null,
-    [editingObjectId, objects],
+    [editingObjectId, objects]
   );
 
   const formInitialValues = useMemo<ObjectFormValues | undefined>(() => {
@@ -177,66 +313,39 @@ function App() {
               <Text c="red" size="sm">
                 Failed to load objects
               </Text>
-            ) : objects.length === 0 ? (
+            ) : sortedObjects.length === 0 ? (
               <Text c="dimmed" size="sm">
                 No objects yet
               </Text>
             ) : (
-              objects.map((object) => (
-                <Group
-                  key={object.id}
-                  justify="space-between"
-                  wrap="nowrap"
-                  p="xs"
-                  style={{
-                    border: "1px solid #e9ecef",
-                    borderRadius: 8,
-                  }}
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={sortedObjects.map((object) => object.id)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <UnstyledButton
-                    onClick={() =>
-                      setFocusRequest({
-                        objectId: object.id,
-                        requestId: Date.now(),
-                      })
-                    }
-                    style={{ minWidth: 0, flex: 1 }}
-                  >
-                    <Stack gap={2}>
-                      <Text fw={500} truncate>
-                        {object.name}
-                      </Text>
-                    </Stack>
-                  </UnstyledButton>
-
-                  <Group gap="xs" wrap="nowrap">
-                    <ActionIcon
-                      color="blue"
-                      variant="light"
-                      aria-label={`Edit ${object.name}`}
-                      onClick={() => handleStartEditObject(object.id)}
-                    >
-                      <IconPencil size={16} />
-                    </ActionIcon>
-
-                    <ActionIcon
-                      color="red"
-                      variant="light"
-                      aria-label={`Delete ${object.name}`}
-                      loading={deleteObjectMutation.isPending}
-                      onClick={() => handleDeleteObject(object.id)}
-                    >
-                      <IconTrash size={16} />
-                    </ActionIcon>
-                  </Group>
-                </Group>
-              ))
+                  <Stack gap="xs">
+                    {sortedObjects.map((object) => (
+                      <SortableObjectItem
+                        key={object.id}
+                        object={object}
+                        onFocus={handleFocusObject}
+                        onEdit={handleStartEditObject}
+                        onDelete={handleDeleteObject}
+                      />
+                    ))}
+                  </Stack>
+                </SortableContext>
+              </DndContext>
             )}
           </Stack>
         }
         map={
           <MapView
-            objects={objects}
+            objects={sortedObjects}
             focusRequest={focusRequest}
             onGeometryCreated={handleGeometryCreated}
           />
