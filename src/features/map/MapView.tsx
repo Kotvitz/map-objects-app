@@ -13,14 +13,15 @@ import type { MapObject, SupportedGeometry } from "../../types/MapObject";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
 
-type FocusRequest = {
-  objectId: string;
-  requestId: number;
-} | null;
+type DrawMode = "point" | "line" | "polygon";
 
 type Props = {
   objects: MapObject[];
-  focusRequest: FocusRequest;
+  focusRequest: {
+    objectId: string;
+    requestId: number;
+  } | null;
+  activeDrawMode: DrawMode | null;
   onGeometryCreated: (geometry: SupportedGeometry) => void;
 };
 
@@ -31,8 +32,15 @@ const POLYGON_LAYER_ID = "objects-polygons-layer";
 
 type MapObjectFeature = Feature<SupportedGeometry, GeoJsonProperties>;
 
+type GeomanMap = maplibregl.Map & {
+  gm?: {
+    enableDraw: (shape: "marker" | "line" | "polygon") => void;
+    disableDraw: () => void;
+  };
+};
+
 function normalizeGeometry(
-  geometry: SupportedGeometry | MultiPolygon,
+  geometry: SupportedGeometry | MultiPolygon
 ): SupportedGeometry | null {
   if (
     geometry.type === "Point" ||
@@ -61,9 +69,7 @@ function escapeHtml(value: string): string {
     .replaceAll("'", "&#39;");
 }
 
-function buildPopupHtml(
-  properties: GeoJsonProperties | null | undefined,
-): string {
+function buildPopupHtml(properties: GeoJsonProperties | null | undefined): string {
   const name =
     typeof properties?.name === "string" && properties.name.trim()
       ? properties.name
@@ -105,7 +111,7 @@ function buildPopupHtml(
 
 function getPopupLngLat(
   feature: maplibregl.MapGeoJSONFeature,
-  clickLngLat: maplibregl.LngLat,
+  clickLngLat: maplibregl.LngLat
 ): maplibregl.LngLatLike {
   if (feature.geometry.type === "Point") {
     return feature.geometry.coordinates as [number, number];
@@ -149,7 +155,7 @@ function flyToObject(map: maplibregl.Map, object: MapObject) {
 
   const bounds = coordinates.reduce(
     (accumulator, [lng, lat]) => accumulator.extend([lng, lat]),
-    new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
+    new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
   );
 
   map.fitBounds(bounds, {
@@ -159,7 +165,12 @@ function flyToObject(map: maplibregl.Map, object: MapObject) {
   });
 }
 
-export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
+export function MapView({
+  objects,
+  focusRequest,
+  activeDrawMode,
+  onGeometryCreated,
+}: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
@@ -206,38 +217,18 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
       },
       controls: {
         draw: {
-          marker: { uiEnabled: true },
-          line: { uiEnabled: true },
-          polygon: { uiEnabled: true },
-          circle: { uiEnabled: false },
-          circle_marker: { uiEnabled: false },
-          ellipse: { uiEnabled: false },
-          text_marker: { uiEnabled: false },
-          rectangle: { uiEnabled: false },
-          freehand: { uiEnabled: false },
-          custom_shape: { uiEnabled: false },
-        },
-        edit: {
-          drag: { uiEnabled: false },
-          cut: { uiEnabled: false },
-          change: { uiEnabled: false },
-          rotate: { uiEnabled: false },
-          scale: { uiEnabled: false },
-          split: { uiEnabled: false },
-          union: { uiEnabled: false },
-          difference: { uiEnabled: false },
-          copy: { uiEnabled: false },
-          line_simplification: { uiEnabled: false },
-          delete: { uiEnabled: false },
-        },
-        helper: {
-          snapping: { uiEnabled: false },
-          zoom_to_features: { uiEnabled: false },
+          marker: { uiEnabled: false },
+          line: { uiEnabled: false },
+          polygon: { uiEnabled: false },
         },
       },
     };
 
-    new Geoman(map, gmOptions);
+    const gm = new Geoman(map, gmOptions);
+
+    map.on("gm:loaded", () => {
+      gm.removeControls();
+    });
 
     map.on("gm:create" as never, (event: unknown) => {
       const candidate = event as {
@@ -250,7 +241,6 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
       };
 
       const geometryCandidate = candidate.feature?.getGeoJson?.().geometry;
-
       if (!geometryCandidate) return;
 
       if (
@@ -259,13 +249,16 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
         "type" in geometryCandidate
       ) {
         const normalizedGeometry = normalizeGeometry(
-          geometryCandidate as SupportedGeometry | MultiPolygon,
+          geometryCandidate as SupportedGeometry | MultiPolygon
         );
 
         if (!normalizedGeometry) return;
 
         onGeometryCreated(normalizedGeometry);
         candidate.feature?.delete?.();
+
+        const gmMap = map as GeomanMap;
+        gmMap.gm?.disableDraw();
       }
     });
 
@@ -324,11 +317,7 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
         },
       });
 
-      const clickableLayerIds = [
-        POINT_LAYER_ID,
-        LINE_LAYER_ID,
-        POLYGON_LAYER_ID,
-      ] as const;
+      const clickableLayerIds = [POINT_LAYER_ID, LINE_LAYER_ID, POLYGON_LAYER_ID] as const;
 
       const handleFeatureClick = (event: maplibregl.MapLayerMouseEvent) => {
         const feature = event.features?.[0];
@@ -382,9 +371,9 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const source = map.getSource(OBJECTS_SOURCE_ID) as
-      | maplibregl.GeoJSONSource
-      | undefined;
+    const source = map.getSource(
+      OBJECTS_SOURCE_ID
+    ) as maplibregl.GeoJSONSource | undefined;
 
     if (!source) return;
 
@@ -398,13 +387,28 @@ export function MapView({ objects, focusRequest, onGeometryCreated }: Props) {
     if (!map) return;
 
     const selectedObject = objects.find(
-      (object) => object.id === focusRequest.objectId,
+      (object) => object.id === focusRequest.objectId
     );
 
     if (!selectedObject) return;
 
     flyToObject(map, selectedObject);
   }, [objects, focusRequest]);
+
+  useEffect(() => {
+    const map = mapRef.current as GeomanMap | null;
+    if (!map?.gm) return;
+
+    map.gm.disableDraw();
+
+    if (activeDrawMode === "point") {
+      map.gm.enableDraw("marker");
+    } else if (activeDrawMode === "line") {
+      map.gm.enableDraw("line");
+    } else if (activeDrawMode === "polygon") {
+      map.gm.enableDraw("polygon");
+    }
+  }, [activeDrawMode]);
 
   return (
     <div
