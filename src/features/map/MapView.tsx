@@ -96,9 +96,7 @@ function buildPopupHtml(properties: GeoJsonProperties | null | undefined): strin
     `
     : "";
 
-  const descriptionSection = description
-    ? `<p style="margin: 8px 0 0; font-size: 14px; line-height: 1.4;">${safeDescription}</p>`
-    : `<p style="margin: 8px 0 0; font-size: 14px; color: #666;">No description</p>`;
+  const descriptionSection = `<p style="margin: 8px 0 0; font-size: 14px; line-height: 1.4;">${safeDescription}</p>`
 
   return `
     <div style="min-width: 200px; max-width: 240px;">
