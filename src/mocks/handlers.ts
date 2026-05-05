@@ -1,5 +1,5 @@
 import { http, HttpResponse } from "msw";
-import type { MapObject } from "../types/MapObject";
+import type { MapObject } from "../shared/types/MapObject";
 import { getMockObjects, setMockObjects } from "./data";
 
 const BASE_URL = "/api/objects";

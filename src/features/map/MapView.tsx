@@ -8,12 +8,14 @@ import type {
   MultiPolygon,
   Position,
 } from "geojson";
-import type { MapObject, SupportedGeometry } from "../../types/MapObject";
+import type { MapObject, SupportedGeometry } from "../../shared/types/MapObject";
+
+import type {
+  DrawMode
+} from "../../shared/types/DrawMode";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
-
-type DrawMode = "point" | "line" | "polygon";
 
 type Props = {
   objects: MapObject[];

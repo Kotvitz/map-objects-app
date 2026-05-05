@@ -1,4 +1,4 @@
-import type { MapObject } from "../types/MapObject";
+import type { MapObject } from "../shared/types/MapObject";
 
 export let mockObjects: MapObject[] = [];
 

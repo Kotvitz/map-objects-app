@@ -59,11 +59,13 @@ import {
 import type {
   MapObject,
   SupportedGeometry,
-} from "./types/MapObject";
+} from "./shared/types/MapObject";
+
+import type {
+  DrawMode
+} from "./shared/types/DrawMode";
 
 const OBJECTS_QUERY_KEY = ["objects"];
-
-type DrawMode = "point" | "line" | "polygon";
 
 type SortableObjectItemProps = {
   object: MapObject;
