@@ -1,14 +1,5 @@
 import { useCallback, useState } from "react";
-import {
-  ActionIcon,
-  Button,
-  Group,
-  Loader,
-  Menu,
-  Stack,
-  Text,
-  UnstyledButton,
-} from "@mantine/core";
+import { Button, Loader, Menu, Stack, Text } from "@mantine/core";
 
 import {
   closestCenter,
@@ -22,24 +13,19 @@ import {
 import {
   SortableContext,
   arrayMove,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 
-import { CSS } from "@dnd-kit/utilities";
-
 import {
-  IconGripVertical,
   IconMapPin,
-  IconPencil,
   IconPlus,
   IconPolygon,
   IconSlash,
-  IconTrash,
 } from "@tabler/icons-react";
 
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
+import { SortableObjectItem } from "./features/objects/components/SortableObjectItem";
 
 import {
   ObjectFormModal,
@@ -50,84 +36,7 @@ import { useObjects } from "./features/objects/hooks/useObjects";
 import { useObjectMutations } from "./features/objects/hooks/useObjectMutations";
 
 import type { DrawMode } from "./shared/types/DrawMode";
-import type { MapObject, SupportedGeometry } from "./shared/types/MapObject";
-
-type SortableObjectItemProps = {
-  object: MapObject;
-  onFocus: (id: string) => void;
-  onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
-};
-
-function SortableObjectItem({
-  object,
-  onFocus,
-  onEdit,
-  onDelete,
-}: SortableObjectItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({
-    id: object.id,
-  });
-
-  return (
-    <Group
-      ref={setNodeRef}
-      justify="space-between"
-      wrap="nowrap"
-      p="xs"
-      style={{
-        border: "1px solid #e9ecef",
-        borderRadius: 8,
-        background: "#fff",
-        opacity: isDragging ? 0.6 : 1,
-        transform: CSS.Transform.toString(transform),
-        transition,
-      }}
-    >
-      <Group gap="xs" wrap="nowrap" style={{ flex: 1 }}>
-        <ActionIcon
-          variant="subtle"
-          color="gray"
-          {...attributes}
-          {...listeners}
-        >
-          <IconGripVertical size={16} />
-        </ActionIcon>
-
-        <UnstyledButton onClick={() => onFocus(object.id)} style={{ flex: 1 }}>
-          <Stack gap={2}>
-            <Text fw={500}>{object.name}</Text>
-          </Stack>
-        </UnstyledButton>
-      </Group>
-
-      <Group gap="xs">
-        <ActionIcon
-          color="blue"
-          variant="light"
-          onClick={() => onEdit(object.id)}
-        >
-          <IconPencil size={16} />
-        </ActionIcon>
-
-        <ActionIcon
-          color="red"
-          variant="light"
-          onClick={() => onDelete(object.id)}
-        >
-          <IconTrash size={16} />
-        </ActionIcon>
-      </Group>
-    </Group>
-  );
-}
+import type { SupportedGeometry } from "./shared/types/MapObject";
 
 function App() {
   const sensors = useSensors(useSensor(PointerSensor));
