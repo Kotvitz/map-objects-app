@@ -18,6 +18,7 @@ import { useObjectMutations } from "./features/objects/hooks/useObjectMutations"
 import type { DrawMode } from "./shared/types/DrawMode";
 import type { SupportedGeometry } from "./shared/types/MapObject";
 
+import { DeleteObjectModal } from "./features/objects/components/DeleteObjectModal";
 
 function App() {
   const [pendingGeometry, setPendingGeometry] =
@@ -35,6 +36,8 @@ function App() {
   } | null>(null);
 
   const [activeDrawMode, setActiveDrawMode] = useState<DrawMode | null>(null);
+
+  const [objectToDeleteId, setObjectToDeleteId] = useState<string | null>(null);
 
   const { data: objects = [], isLoading, isError } = useObjects();
 
@@ -93,9 +96,16 @@ function App() {
     }
   };
 
-  const handleDeleteObject = (id: string) => {
-    deleteMutation.mutate(id, {
+  const handleRequestDeleteObject = (id: string) => {
+    setObjectToDeleteId(id);
+  };
+
+  const handleConfirmDeleteObject = () => {
+    if (!objectToDeleteId) return;
+
+    deleteMutation.mutate(objectToDeleteId, {
       onSuccess: () => {
+        setObjectToDeleteId(null);
         setEditingObjectId(null);
       },
     });
@@ -130,8 +140,18 @@ function App() {
 
   const editingObject = objects.find((o) => o.id === editingObjectId) ?? null;
 
+  const objectToDelete =
+    objects.find((object) => object.id === objectToDeleteId) ?? null;
+
   return (
     <>
+      <DeleteObjectModal
+        opened={objectToDeleteId !== null}
+        objectName={objectToDelete?.name}
+        isDeleting={deleteMutation.isPending}
+        onClose={() => setObjectToDeleteId(null)}
+        onConfirm={handleConfirmDeleteObject}
+      />
       <Layout
         sidebar={
           <ObjectSidebar
@@ -141,7 +161,7 @@ function App() {
             onStartDraw={handleStartDraw}
             onFocusObject={handleFocusObject}
             onEditObject={handleEditObject}
-            onDeleteObject={handleDeleteObject}
+            onDeleteObject={handleRequestDeleteObject}
             onDragEnd={handleDragEnd}
           />
         }
