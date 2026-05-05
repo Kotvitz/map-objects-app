@@ -180,9 +180,7 @@ export function MapView({
   >(
     () => ({
       type: "FeatureCollection",
-      features: [...objects]
-        .sort((a, b) => a.order - b.order)
-        .map<MapObjectFeature>((object, index, sortedObjects) => ({
+      features: objects.map<MapObjectFeature>((object, index, sortedObjects) => ({
           type: "Feature",
           geometry: object.geometry,
           properties: {
