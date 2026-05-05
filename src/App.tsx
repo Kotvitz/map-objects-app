@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import {
   ActionIcon,
   Button,
@@ -9,8 +9,6 @@ import {
   Text,
   UnstyledButton,
 } from "@mantine/core";
-
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
   closestCenter,
@@ -48,24 +46,11 @@ import {
   type ObjectFormValues,
 } from "./features/objects/ObjectFormModal";
 
-import {
-  createObject,
-  deleteObject,
-  getObjects,
-  reorderObjects,
-  updateObject,
-} from "./services/objectApi";
+import { useObjects } from "./features/objects/hooks/useObjects";
+import { useObjectMutations } from "./features/objects/hooks/useObjectMutations";
 
-import type {
-  MapObject,
-  SupportedGeometry,
-} from "./shared/types/MapObject";
-
-import type {
-  DrawMode
-} from "./shared/types/DrawMode";
-
-const OBJECTS_QUERY_KEY = ["objects"];
+import type { DrawMode } from "./shared/types/DrawMode";
+import type { MapObject, SupportedGeometry } from "./shared/types/MapObject";
 
 type SortableObjectItemProps = {
   object: MapObject;
@@ -116,14 +101,9 @@ function SortableObjectItem({
           <IconGripVertical size={16} />
         </ActionIcon>
 
-        <UnstyledButton
-          onClick={() => onFocus(object.id)}
-          style={{ flex: 1 }}
-        >
+        <UnstyledButton onClick={() => onFocus(object.id)} style={{ flex: 1 }}>
           <Stack gap={2}>
-            <Text fw={500}>
-              {object.name}
-            </Text>
+            <Text fw={500}>{object.name}</Text>
           </Stack>
         </UnstyledButton>
       </Group>
@@ -150,111 +130,30 @@ function SortableObjectItem({
 }
 
 function App() {
-  const queryClient = useQueryClient();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor)
-  );
+  const sensors = useSensors(useSensor(PointerSensor));
 
   const [pendingGeometry, setPendingGeometry] =
     useState<SupportedGeometry | null>(null);
 
-  const [formOpened, setFormOpened] =
-    useState(false);
+  const [formOpened, setFormOpened] = useState(false);
 
-  const [formMode, setFormMode] =
-    useState<"create" | "edit">("create");
+  const [formMode, setFormMode] = useState<"create" | "edit">("create");
 
-  const [editingObjectId, setEditingObjectId] =
-    useState<string | null>(null);
+  const [editingObjectId, setEditingObjectId] = useState<string | null>(null);
 
-  const [focusRequest, setFocusRequest] =
-    useState<{
-      objectId: string;
-      requestId: number;
-    } | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{
+    objectId: string;
+    requestId: number;
+  } | null>(null);
 
-  const [activeDrawMode, setActiveDrawMode] =
-    useState<DrawMode | null>(null);
+  const [activeDrawMode, setActiveDrawMode] = useState<DrawMode | null>(null);
 
-  const {
-    data: objects = [],
-    isLoading,
-    isError,
-  } = useQuery<MapObject[]>({
-    queryKey: OBJECTS_QUERY_KEY,
-    queryFn: getObjects,
-  });
+  const { data: objects = [], isLoading, isError } = useObjects();
 
-  const sortedObjects = useMemo(
-    () =>
-      [...objects].sort(
-        (a, b) => a.order - b.order
-      ),
-    [objects]
-  );
+  const { createMutation, updateMutation, deleteMutation, reorderMutation } =
+    useObjectMutations();
 
-  const createMutation = useMutation({
-    mutationFn: createObject,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: OBJECTS_QUERY_KEY,
-      });
-
-      setFormOpened(false);
-      setPendingGeometry(null);
-      setEditingObjectId(null);
-      setActiveDrawMode(null);
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({
-      id,
-      values,
-    }: {
-      id: string;
-      values: ObjectFormValues;
-    }) =>
-      updateObject(id, values),
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: OBJECTS_QUERY_KEY,
-      });
-
-      setFormOpened(false);
-      setEditingObjectId(null);
-      setActiveDrawMode(null);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: deleteObject,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: OBJECTS_QUERY_KEY,
-      });
-
-      setEditingObjectId(null);
-    },
-  });
-
-  const reorderMutation = useMutation({
-    mutationFn: reorderObjects,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: OBJECTS_QUERY_KEY,
-      });
-    },
-  });
-
-  const handleStartDraw = (
-    mode: DrawMode
-  ) => {
+  const handleStartDraw = (mode: DrawMode) => {
     setPendingGeometry(null);
     setEditingObjectId(null);
     setFormMode("create");
@@ -262,234 +161,167 @@ function App() {
     setActiveDrawMode(mode);
   };
 
-  const handleGeometryCreated =
-    useCallback(
-      (geometry: SupportedGeometry) => {
-        setPendingGeometry(geometry);
-        setFormMode("create");
-        setFormOpened(true);
-        setActiveDrawMode(null);
-      },
-      []
-    );
+  const handleGeometryCreated = useCallback((geometry: SupportedGeometry) => {
+    setPendingGeometry(geometry);
+    setFormMode("create");
+    setFormOpened(true);
+    setActiveDrawMode(null);
+  }, []);
 
-  const handleSubmitForm = (
-    values: ObjectFormValues
-  ) => {
-    if (
-      formMode === "create" &&
-      pendingGeometry
-    ) {
-      createMutation.mutate({
-        ...values,
-        geometry: pendingGeometry,
-      });
+  const handleSubmitForm = (values: ObjectFormValues) => {
+    if (formMode === "create" && pendingGeometry) {
+      createMutation.mutate(
+        {
+          ...values,
+          geometry: pendingGeometry,
+        },
+        {
+          onSuccess: () => {
+            setFormOpened(false);
+            setPendingGeometry(null);
+            setEditingObjectId(null);
+            setActiveDrawMode(null);
+          },
+        },
+      );
 
       return;
     }
 
-    if (
-      formMode === "edit" &&
-      editingObjectId
-    ) {
-      updateMutation.mutate({
-        id: editingObjectId,
-        values,
-      });
+    if (formMode === "edit" && editingObjectId) {
+      updateMutation.mutate(
+        {
+          id: editingObjectId,
+          input: values,
+        },
+        {
+          onSuccess: () => {
+            setFormOpened(false);
+            setEditingObjectId(null);
+            setActiveDrawMode(null);
+          },
+        },
+      );
     }
   };
 
-  const handleDeleteObject = (
-    id: string
-  ) => {
-    deleteMutation.mutate(id);
+  const handleDeleteObject = (id: string) => {
+    deleteMutation.mutate(id, {
+      onSuccess: () => {
+        setEditingObjectId(null);
+      },
+    });
   };
 
-  const handleEditObject = (
-    id: string
-  ) => {
+  const handleEditObject = (id: string) => {
     setEditingObjectId(id);
     setFormMode("edit");
     setFormOpened(true);
   };
 
-  const handleFocusObject = (
-    id: string
-  ) => {
+  const handleFocusObject = (id: string) => {
     setFocusRequest({
       objectId: id,
       requestId: Date.now(),
     });
   };
 
-  const handleDragEnd = (
-    event: DragEndEvent
-  ) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
     if (!over) return;
-
     if (active.id === over.id) return;
 
-    const oldIndex =
-      sortedObjects.findIndex(
-        (o) => o.id === active.id
-      );
+    const oldIndex = objects.findIndex((o) => o.id === active.id);
+    const newIndex = objects.findIndex((o) => o.id === over.id);
 
-    const newIndex =
-      sortedObjects.findIndex(
-        (o) => o.id === over.id
-      );
+    const reordered = arrayMove(objects, oldIndex, newIndex);
 
-    const reordered = arrayMove(
-      sortedObjects,
-      oldIndex,
-      newIndex
-    );
-
-    reorderMutation.mutate(
-      reordered.map((o) => o.id)
-    );
+    reorderMutation.mutate(reordered.map((o) => o.id));
   };
 
-  const editingObject =
-    objects.find(
-      (o) => o.id === editingObjectId
-    ) ?? null;
+  const editingObject = objects.find((o) => o.id === editingObjectId) ?? null;
 
   return (
     <>
       <Layout
         sidebar={
           <Stack>
-
-            <Text fw={700}>
-              List
-            </Text>
+            <Text fw={700}>List</Text>
 
             {isLoading ? (
               <Loader size="sm" />
             ) : isError ? (
-              <Text c="red">
-                Failed to load
-              </Text>
-            ) : sortedObjects.length === 0 ? (
-              <Text c="dimmed">
-                No objects yet
-              </Text>
+              <Text c="red">Failed to load</Text>
+            ) : objects.length === 0 ? (
+              <Text c="dimmed">No objects yet</Text>
             ) : (
               <DndContext
                 sensors={sensors}
-                collisionDetection={
-                  closestCenter
-                }
-                onDragEnd={
-                  handleDragEnd
-                }
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
                 <SortableContext
-                  items={sortedObjects.map(
-                    (o) => o.id
-                  )}
-                  strategy={
-                    verticalListSortingStrategy
-                  }
+                  items={objects.map((o) => o.id)}
+                  strategy={verticalListSortingStrategy}
                 >
                   <Stack gap="xs">
-                    {sortedObjects.map(
-                      (object) => (
-                        <SortableObjectItem
-                          key={
-                            object.id
-                          }
-                          object={
-                            object
-                          }
-                          onFocus={
-                            handleFocusObject
-                          }
-                          onEdit={
-                            handleEditObject
-                          }
-                          onDelete={
-                            handleDeleteObject
-                          }
-                        />
-                      )
-                    )}
+                    {objects.map((object) => (
+                      <SortableObjectItem
+                        key={object.id}
+                        object={object}
+                        onFocus={handleFocusObject}
+                        onEdit={handleEditObject}
+                        onDelete={handleDeleteObject}
+                      />
+                    ))}
                   </Stack>
                 </SortableContext>
               </DndContext>
             )}
 
             <Menu>
-
               <Menu.Target>
                 <Button
                   variant="subtle"
                   justify="flex-start"
-                  leftSection={
-                    <IconPlus size={18} />
-                  }
+                  leftSection={<IconPlus size={18} />}
                 >
                   Add Object
                 </Button>
               </Menu.Target>
 
               <Menu.Dropdown>
-
                 <Menu.Item
-                  leftSection={
-                    <IconMapPin size={16} />
-                  }
-                  onClick={() =>
-                    handleStartDraw("point")
-                  }
+                  leftSection={<IconMapPin size={16} />}
+                  onClick={() => handleStartDraw("point")}
                 >
                   Point
                 </Menu.Item>
 
                 <Menu.Item
-                  leftSection={
-                    <IconSlash size={16} />
-                  }
-                  onClick={() =>
-                    handleStartDraw("line")
-                  }
+                  leftSection={<IconSlash size={16} />}
+                  onClick={() => handleStartDraw("line")}
                 >
                   Line
                 </Menu.Item>
 
                 <Menu.Item
-                  leftSection={
-                    <IconPolygon size={16} />
-                  }
-                  onClick={() =>
-                    handleStartDraw("polygon")
-                  }
+                  leftSection={<IconPolygon size={16} />}
+                  onClick={() => handleStartDraw("polygon")}
                 >
                   Polygon
                 </Menu.Item>
-
               </Menu.Dropdown>
-
             </Menu>
-
           </Stack>
         }
-
         map={
           <MapView
-            objects={sortedObjects}
-            focusRequest={
-              focusRequest
-            }
-            activeDrawMode={
-              activeDrawMode
-            }
-            onGeometryCreated={
-              handleGeometryCreated
-            }
+            objects={objects}
+            focusRequest={focusRequest}
+            activeDrawMode={activeDrawMode}
+            onGeometryCreated={handleGeometryCreated}
           />
         }
       />
@@ -500,27 +332,16 @@ function App() {
         initialValues={
           editingObject
             ? {
-                name:
-                  editingObject.name,
-                description:
-                  editingObject.description ??
-                  "",
-                imageUrl:
-                  editingObject.imageUrl ??
-                  "",
-                color:
-                  editingObject.color,
+                name: editingObject.name,
+                description: editingObject.description ?? "",
+                imageUrl: editingObject.imageUrl ?? "",
+                color: editingObject.color,
               }
             : undefined
         }
-        onClose={() =>
-          setFormOpened(false)
-        }
+        onClose={() => setFormOpened(false)}
         onSubmit={handleSubmitForm}
-        submitting={
-          createMutation.isPending ||
-          updateMutation.isPending
-        }
+        submitting={createMutation.isPending || updateMutation.isPending}
       />
     </>
   );
