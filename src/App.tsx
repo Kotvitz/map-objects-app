@@ -1,31 +1,11 @@
 import { useCallback, useState } from "react";
-import { Button, Loader, Menu, Stack, Text } from "@mantine/core";
 
-import {
-  closestCenter,
-  DndContext,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-
-import {
-  IconMapPin,
-  IconPlus,
-  IconPolygon,
-  IconSlash,
-} from "@tabler/icons-react";
+import { arrayMove } from "@dnd-kit/sortable";
+import { type DragEndEvent } from "@dnd-kit/core";
 
 import { Layout } from "./components/layout/Layout";
 import { MapView } from "./features/map/MapView";
-import { SortableObjectItem } from "./features/objects/components/SortableObjectItem";
+import { ObjectSidebar } from "./features/objects/components/ObjectSidebar";
 
 import {
   ObjectFormModal,
@@ -38,9 +18,8 @@ import { useObjectMutations } from "./features/objects/hooks/useObjectMutations"
 import type { DrawMode } from "./shared/types/DrawMode";
 import type { SupportedGeometry } from "./shared/types/MapObject";
 
-function App() {
-  const sensors = useSensors(useSensor(PointerSensor));
 
+function App() {
   const [pendingGeometry, setPendingGeometry] =
     useState<SupportedGeometry | null>(null);
 
@@ -155,75 +134,16 @@ function App() {
     <>
       <Layout
         sidebar={
-          <Stack>
-            <Text fw={700}>List</Text>
-
-            {isLoading ? (
-              <Loader size="sm" />
-            ) : isError ? (
-              <Text c="red">Failed to load</Text>
-            ) : objects.length === 0 ? (
-              <Text c="dimmed">No objects yet</Text>
-            ) : (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={objects.map((o) => o.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <Stack gap="xs">
-                    {objects.map((object) => (
-                      <SortableObjectItem
-                        key={object.id}
-                        object={object}
-                        onFocus={handleFocusObject}
-                        onEdit={handleEditObject}
-                        onDelete={handleDeleteObject}
-                      />
-                    ))}
-                  </Stack>
-                </SortableContext>
-              </DndContext>
-            )}
-
-            <Menu>
-              <Menu.Target>
-                <Button
-                  variant="subtle"
-                  justify="flex-start"
-                  leftSection={<IconPlus size={18} />}
-                >
-                  Add Object
-                </Button>
-              </Menu.Target>
-
-              <Menu.Dropdown>
-                <Menu.Item
-                  leftSection={<IconMapPin size={16} />}
-                  onClick={() => handleStartDraw("point")}
-                >
-                  Point
-                </Menu.Item>
-
-                <Menu.Item
-                  leftSection={<IconSlash size={16} />}
-                  onClick={() => handleStartDraw("line")}
-                >
-                  Line
-                </Menu.Item>
-
-                <Menu.Item
-                  leftSection={<IconPolygon size={16} />}
-                  onClick={() => handleStartDraw("polygon")}
-                >
-                  Polygon
-                </Menu.Item>
-              </Menu.Dropdown>
-            </Menu>
-          </Stack>
+          <ObjectSidebar
+            objects={objects}
+            isLoading={isLoading}
+            isError={isError}
+            onStartDraw={handleStartDraw}
+            onFocusObject={handleFocusObject}
+            onEditObject={handleEditObject}
+            onDeleteObject={handleDeleteObject}
+            onDragEnd={handleDragEnd}
+          />
         }
         map={
           <MapView
