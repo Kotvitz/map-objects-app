@@ -1,40 +1,27 @@
+import { AppShell } from "@mantine/core";
+import type { ReactNode } from "react";
+
 type Props = {
-  sidebar: React.ReactNode;
-  map: React.ReactNode;
+  sidebar: ReactNode;
+  map: ReactNode;
 };
 
 export function Layout({ sidebar, map }: Props) {
   return (
-    <div
-      style={{
-        display: "flex",
-        width: "100vw",
-        height: "100vh",
-        overflow: "hidden",
+    <AppShell
+      navbar={{
+        width: 320,
+        breakpoint: "sm",
       }}
+      padding={0}
     >
-      <aside
-        style={{
-          width: 320,
-          borderRight: "1px solid #ddd",
-          padding: 16,
-          overflowY: "auto",
-          background: "#fff",
-        }}
-      >
+      <AppShell.Navbar p="md">
         {sidebar}
-      </aside>
+      </AppShell.Navbar>
 
-      <main
-        style={{
-          flex: 1,
-          minWidth: 0,
-          height: "100%",
-          position: "relative",
-        }}
-      >
+      <AppShell.Main>
         {map}
-      </main>
-    </div>
+      </AppShell.Main>
+    </AppShell>
   );
 }
