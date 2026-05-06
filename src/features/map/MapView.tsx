@@ -1,10 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { Geoman, type GmOptionsPartial } from "@geoman-io/maplibre-geoman-free";
-import type {
-  MultiPolygon,
-  Position,
-} from "geojson";
+import type { MultiPolygon } from "geojson";
 import type {
   MapObject,
   SupportedGeometry,
@@ -17,6 +14,7 @@ import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
 
 import { buildPopupHtml, getPopupLngLat } from "./utils/popup";
 import { createObjectFeatureCollection } from "./utils/featureCollection";
+import { flyToObject, normalizeGeometry } from "./utils/geometry";
 
 type Props = {
   objects: MapObject[];
@@ -39,72 +37,6 @@ type GeomanMap = maplibregl.Map & {
     disableDraw: () => void;
   };
 };
-
-function normalizeGeometry(
-  geometry: SupportedGeometry | MultiPolygon,
-): SupportedGeometry | null {
-  if (
-    geometry.type === "Point" ||
-    geometry.type === "LineString" ||
-    geometry.type === "Polygon"
-  ) {
-    return geometry;
-  }
-
-  if (geometry.type === "MultiPolygon" && geometry.coordinates.length === 1) {
-    return {
-      type: "Polygon",
-      coordinates: geometry.coordinates[0],
-    };
-  }
-
-  return null;
-}
-
-function collectCoordinates(geometry: SupportedGeometry): [number, number][] {
-  if (geometry.type === "Point") {
-    const [lng, lat] = geometry.coordinates;
-    return [[lng, lat]];
-  }
-
-  if (geometry.type === "LineString") {
-    return geometry.coordinates.map(([lng, lat]) => [lng, lat]);
-  }
-
-  return geometry.coordinates.flat().map((position: Position) => {
-    const [lng, lat] = position;
-    return [lng, lat];
-  });
-}
-
-function flyToObject(map: maplibregl.Map, object: MapObject) {
-  const coordinates = collectCoordinates(object.geometry);
-
-  if (coordinates.length === 0) return;
-
-  if (object.geometry.type === "Point") {
-    const [lng, lat] = coordinates[0];
-
-    map.flyTo({
-      center: [lng, lat],
-      zoom: 14,
-      essential: true,
-    });
-
-    return;
-  }
-
-  const bounds = coordinates.reduce(
-    (accumulator, [lng, lat]) => accumulator.extend([lng, lat]),
-    new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
-  );
-
-  map.fitBounds(bounds, {
-    padding: 60,
-    maxZoom: 15,
-    duration: 800,
-  });
-}
 
 export function MapView({
   objects,
