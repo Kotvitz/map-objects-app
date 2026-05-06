@@ -2,22 +2,21 @@ import { useEffect, useMemo, useRef } from "react";
 import maplibregl from "maplibre-gl";
 import { Geoman, type GmOptionsPartial } from "@geoman-io/maplibre-geoman-free";
 import type {
-  Feature,
-  FeatureCollection,
-  GeoJsonProperties,
   MultiPolygon,
   Position,
 } from "geojson";
-import type { MapObject, SupportedGeometry } from "../../shared/types/MapObject";
-
 import type {
-  DrawMode
-} from "../../shared/types/DrawMode";
+  MapObject,
+  SupportedGeometry,
+} from "../../shared/types/MapObject";
+
+import type { DrawMode } from "../../shared/types/DrawMode";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "@geoman-io/maplibre-geoman-free/dist/maplibre-geoman.css";
 
 import { buildPopupHtml, getPopupLngLat } from "./utils/popup";
+import { createObjectFeatureCollection } from "./utils/featureCollection";
 
 type Props = {
   objects: MapObject[];
@@ -34,8 +33,6 @@ const POINT_LAYER_ID = "objects-points-layer";
 const LINE_LAYER_ID = "objects-lines-layer";
 const POLYGON_LAYER_ID = "objects-polygons-layer";
 
-type MapObjectFeature = Feature<SupportedGeometry, GeoJsonProperties>;
-
 type GeomanMap = maplibregl.Map & {
   gm?: {
     enableDraw: (shape: "marker" | "line" | "polygon") => void;
@@ -44,7 +41,7 @@ type GeomanMap = maplibregl.Map & {
 };
 
 function normalizeGeometry(
-  geometry: SupportedGeometry | MultiPolygon
+  geometry: SupportedGeometry | MultiPolygon,
 ): SupportedGeometry | null {
   if (
     geometry.type === "Point" ||
@@ -99,7 +96,7 @@ function flyToObject(map: maplibregl.Map, object: MapObject) {
 
   const bounds = coordinates.reduce(
     (accumulator, [lng, lat]) => accumulator.extend([lng, lat]),
-    new maplibregl.LngLatBounds(coordinates[0], coordinates[0])
+    new maplibregl.LngLatBounds(coordinates[0], coordinates[0]),
   );
 
   map.fitBounds(bounds, {
@@ -119,26 +116,9 @@ export function MapView({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
 
-  const featureCollection = useMemo<
-    FeatureCollection<SupportedGeometry, GeoJsonProperties>
-  >(
-    () => ({
-      type: "FeatureCollection",
-      features: objects.map<MapObjectFeature>((object, index, sortedObjects) => ({
-          type: "Feature",
-          geometry: object.geometry,
-          properties: {
-            id: object.id,
-            name: object.name,
-            description: object.description,
-            imageUrl: object.imageUrl,
-            color: object.color,
-            order: object.order,
-            renderOrder: sortedObjects.length - index,
-          },
-        })),
-    }),
-    [objects]
+  const featureCollection = useMemo(
+    () => createObjectFeatureCollection(objects),
+    [objects],
   );
 
   useEffect(() => {
@@ -191,7 +171,7 @@ export function MapView({
         "type" in geometryCandidate
       ) {
         const normalizedGeometry = normalizeGeometry(
-          geometryCandidate as SupportedGeometry | MultiPolygon
+          geometryCandidate as SupportedGeometry | MultiPolygon,
         );
 
         if (!normalizedGeometry) return;
@@ -259,7 +239,11 @@ export function MapView({
         },
       });
 
-      const clickableLayerIds = [POINT_LAYER_ID, LINE_LAYER_ID, POLYGON_LAYER_ID] as const;
+      const clickableLayerIds = [
+        POINT_LAYER_ID,
+        LINE_LAYER_ID,
+        POLYGON_LAYER_ID,
+      ] as const;
 
       const handleFeatureClick = (event: maplibregl.MapLayerMouseEvent) => {
         const feature = event.features?.[0];
@@ -313,9 +297,9 @@ export function MapView({
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const source = map.getSource(
-      OBJECTS_SOURCE_ID
-    ) as maplibregl.GeoJSONSource | undefined;
+    const source = map.getSource(OBJECTS_SOURCE_ID) as
+      | maplibregl.GeoJSONSource
+      | undefined;
 
     if (!source) return;
 
@@ -329,7 +313,7 @@ export function MapView({
     if (!map) return;
 
     const selectedObject = objects.find(
-      (object) => object.id === focusRequest.objectId
+      (object) => object.id === focusRequest.objectId,
     );
 
     if (!selectedObject) return;
