@@ -16,6 +16,13 @@ import { buildPopupHtml, getPopupLngLat } from "./utils/popup";
 import { createObjectFeatureCollection } from "./utils/featureCollection";
 import { flyToObject, normalizeGeometry } from "./utils/geometry";
 
+import {
+  addObjectLayers,
+  addObjectsSource,
+  CLICKABLE_LAYER_IDS,
+  updateObjectsSourceData,
+} from "./utils/mapLayers";
+
 type Props = {
   objects: MapObject[];
   focusRequest: {
@@ -25,11 +32,6 @@ type Props = {
   activeDrawMode: DrawMode | null;
   onGeometryCreated: (geometry: SupportedGeometry) => void;
 };
-
-const OBJECTS_SOURCE_ID = "objects-source";
-const POINT_LAYER_ID = "objects-points-layer";
-const LINE_LAYER_ID = "objects-lines-layer";
-const POLYGON_LAYER_ID = "objects-polygons-layer";
 
 type GeomanMap = maplibregl.Map & {
   gm?: {
@@ -119,63 +121,8 @@ export function MapView({
     map.on("load", () => {
       map.resize();
 
-      map.addSource(OBJECTS_SOURCE_ID, {
-        type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [],
-        },
-      });
-
-      map.addLayer({
-        id: POLYGON_LAYER_ID,
-        type: "fill",
-        source: OBJECTS_SOURCE_ID,
-        filter: ["==", ["geometry-type"], "Polygon"],
-        layout: {
-          "fill-sort-key": ["get", "renderOrder"],
-        },
-        paint: {
-          "fill-color": ["coalesce", ["get", "color"], "#3388ff"],
-          "fill-opacity": 0.4,
-        },
-      });
-
-      map.addLayer({
-        id: LINE_LAYER_ID,
-        type: "line",
-        source: OBJECTS_SOURCE_ID,
-        filter: ["==", ["geometry-type"], "LineString"],
-        layout: {
-          "line-sort-key": ["get", "renderOrder"],
-        },
-        paint: {
-          "line-color": ["coalesce", ["get", "color"], "#3388ff"],
-          "line-width": 4,
-        },
-      });
-
-      map.addLayer({
-        id: POINT_LAYER_ID,
-        type: "circle",
-        source: OBJECTS_SOURCE_ID,
-        filter: ["==", ["geometry-type"], "Point"],
-        layout: {
-          "circle-sort-key": ["get", "renderOrder"],
-        },
-        paint: {
-          "circle-color": ["coalesce", ["get", "color"], "#3388ff"],
-          "circle-radius": 8,
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#ffffff",
-        },
-      });
-
-      const clickableLayerIds = [
-        POINT_LAYER_ID,
-        LINE_LAYER_ID,
-        POLYGON_LAYER_ID,
-      ] as const;
+      addObjectsSource(map);
+      addObjectLayers(map);
 
       const handleFeatureClick = (event: maplibregl.MapLayerMouseEvent) => {
         const feature = event.features?.[0];
@@ -201,7 +148,7 @@ export function MapView({
         map.getCanvas().style.cursor = "";
       };
 
-      clickableLayerIds.forEach((layerId) => {
+      CLICKABLE_LAYER_IDS.forEach((layerId) => {
         map.on("click", layerId, handleFeatureClick);
         map.on("mouseenter", layerId, handleMouseEnter);
         map.on("mouseleave", layerId, handleMouseLeave);
@@ -229,13 +176,7 @@ export function MapView({
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
 
-    const source = map.getSource(OBJECTS_SOURCE_ID) as
-      | maplibregl.GeoJSONSource
-      | undefined;
-
-    if (!source) return;
-
-    source.setData(featureCollection);
+    updateObjectsSourceData(map, featureCollection);
   }, [featureCollection]);
 
   useEffect(() => {
