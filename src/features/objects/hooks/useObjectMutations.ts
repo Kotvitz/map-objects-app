@@ -7,7 +7,7 @@ import {
   reorderObjects,
   updateObject,
 } from "../../../services/objectApi";
-import type { ObjectFormValues } from "../ObjectFormModal";
+import type { ObjectFormValues } from "../components/ObjectFormModal";
 import { notifications } from "@mantine/notifications";
 
 type UpdateObjectVariables = {

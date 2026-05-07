@@ -1,5 +1,5 @@
 import type { MapObject, SupportedGeometry } from "../shared/types/MapObject";
-import type { ObjectFormValues } from "../features/objects/ObjectFormModal";
+import type { ObjectFormValues } from "../features/objects/components/ObjectFormModal";
 
 const BASE_URL = "/api/objects";
 

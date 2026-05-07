@@ -10,7 +10,7 @@ import { ObjectSidebar } from "./features/objects/components/ObjectSidebar";
 import {
   ObjectFormModal,
   type ObjectFormValues,
-} from "./features/objects/ObjectFormModal";
+} from "./features/objects/components/ObjectFormModal";
 
 import { useObjects } from "./features/objects/hooks/useObjects";
 import { useObjectMutations } from "./features/objects/hooks/useObjectMutations";
