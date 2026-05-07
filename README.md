@@ -185,13 +185,23 @@ This means:
 
 ```text
 src/
-  components/        # Layout components
+  components/                 # Shared layout components
+
   features/
-    map/             # Map rendering logic
-    objects/         # Object form logic
-  mocks/             # Mock Service Worker setup
-  services/          # API service layer
-  types/             # TypeScript types
+    map/                      # Map rendering and interaction logic
+      types/                  # Map-related TypeScript types
+      utils/                  # Popup, geometry, feature collection and layer utilities
+
+    objects/                  # Object management domain
+      components/             # Sidebar, sortable items and modals
+      hooks/                  # React Query hooks and object-related logic
+
+  mocks/                      # Mock Service Worker setup
+
+  services/                   # API service layer
+
+  shared/
+    types/                    # Shared TypeScript types used across features
 ```
 
 ---
