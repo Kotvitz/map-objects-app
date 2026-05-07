@@ -145,13 +145,6 @@ function App() {
 
   return (
     <>
-      <DeleteObjectModal
-        opened={objectToDeleteId !== null}
-        objectName={objectToDelete?.name}
-        isDeleting={deleteMutation.isPending}
-        onClose={() => setObjectToDeleteId(null)}
-        onConfirm={handleConfirmDeleteObject}
-      />
       <Layout
         sidebar={
           <ObjectSidebar
@@ -191,6 +184,14 @@ function App() {
         onClose={() => setFormOpened(false)}
         onSubmit={handleSubmitForm}
         submitting={createMutation.isPending || updateMutation.isPending}
+      />
+
+      <DeleteObjectModal
+        opened={objectToDeleteId !== null}
+        objectName={objectToDelete?.name}
+        isDeleting={deleteMutation.isPending}
+        onClose={() => setObjectToDeleteId(null)}
+        onConfirm={handleConfirmDeleteObject}
       />
     </>
   );
